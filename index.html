@@ -1,0 +1,364 @@
+<html>    
+  <head>
+    <!--jquery min-->
+    <script type="text/javascript" src="lib/jquery-1.11.0.min.js"></script>
+    <!--Google Maps api-->
+    <script src="http://maps.googleapis.com/maps/api/js?sensor=false" type="text/javascript"></script>
+    <!--Gmaps3 javascript library-->
+    <script type="text/javascript" src="lib/gmap3.js"></script>
+    <!--Gmaps3 stylesheet-->
+    <link rel="stylesheet" type="text/css" href="menu/gmap3-menu.css" />
+    <!--Gmap3 context menu-->
+    <script type="text/javascript" src="menu/gmap3-menu.js"></script> 
+    <!--General stylesheet-->
+    <style>
+      #container{
+        position:relative;
+        height:700px;
+      }
+      #directions{
+        position:absolute;
+        width: 23%;
+        right:1%;
+        height: 690px;
+        overflow:auto;
+      }
+      #googleMap{
+        border: 1px dashed #C0C0C0;
+        width: 75%;
+        height: 700px;
+      }
+    </style>
+    <!--jquery ui stylesheet-->
+    <link rel="stylesheet" href="lib/jquery-ui.css">
+    <!--jquery ui library-->
+    <script src="//code.jquery.com/ui/1.11.1/jquery-ui.js"></script>  
+    <!--ui style sheet-->
+    <style>
+    fieldset { padding:0; border:0; margin-top:25px; }
+    h1 { font-size: 1.2em; margin: .6em 0; }
+    div#users-contain { width: 350px; margin: 20px 0; }
+    div#users-contain table { margin: 1em 0; border-collapse: collapse; width: 100%; }
+    div#users-contain table td, div#users-contain table th { border: 1px solid #eee; padding: .6em 10px; text-align: left; }
+    .ui-dialog .ui-state-error { padding: .3em; }
+    .validateTips { border: 1px solid transparent; padding: 0.3em; }
+    </style>
+    <script type="text/javascript">
+    function ui_dialog_form(){
+    var dialog, form,
+ 
+      // From http://www.whatwg.org/specs/web-apps/current-work/multipage/states-of-the-type-attribute.html#e-mail-state-%28type=email%29
+      emailRegex = /^[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/,
+      name = $( "#name" ),
+      email = $( "#email" ),
+      password = $( "#password" ),
+      allFields = $( [] ).add( name ).add( email ).add( password ),
+      tips = $( ".validateTips" );
+ 
+    function updateTips( t ) {
+      tips
+        .text( t )
+        .addClass( "ui-state-highlight" );
+      setTimeout(function() {
+        tips.removeClass( "ui-state-highlight", 1500 );
+      }, 500 );
+    }
+ 
+    function checkLength( o, n, min, max ) {
+      if ( o.val().length > max || o.val().length < min ) {
+        o.addClass( "ui-state-error" );
+        updateTips( "Length of " + n + " must be between " +
+          min + " and " + max + "." );
+        return false;
+      } else {
+        return true;
+      }
+    }
+ 
+    function checkRegexp( o, regexp, n ) {
+      if ( !( regexp.test( o.val() ) ) ) {
+        o.addClass( "ui-state-error" );
+        updateTips( n );
+        return false;
+      } else {
+        return true;
+      }
+    }
+ 
+    function addUser() {
+      var valid = true;
+      allFields.removeClass( "ui-state-error" );
+ 
+      valid = valid && checkLength( name, "username", 3, 16 );
+      valid = valid && checkLength( email, "email", 6, 80 );
+      valid = valid && checkLength( password, "password", 5, 16 );
+ 
+      valid = valid && checkRegexp( name, /^[a-z]([0-9a-z_\s])+$/i, "Username may consist of a-z, 0-9, underscores, spaces and must begin with a letter." );
+      valid = valid && checkRegexp( email, emailRegex, "eg. ui@jquery.com" );
+      valid = valid && checkRegexp( password, /^([0-9a-zA-Z])+$/, "Password field only allow : a-z 0-9" );
+ 
+      if ( valid ) {
+        $( "#users tbody" ).append( "<tr>" +
+          "<td>" + name.val() + "</td>" +
+          "<td>" + email.val() + "</td>" +
+          "<td>" + password.val() + "</td>" +
+        "</tr>" );
+        dialog.dialog( "close" );
+      }
+      return valid;
+    }
+ 
+    dialog = $( "#dialog-form" ).dialog({
+      autoOpen: false,
+      height: 300,
+      width: 350,
+      modal: true,
+      buttons: {
+        "Create Point": addUser,
+        Cancel: function() {
+          dialog.dialog( "close" );
+        }
+      },
+      close: function() {
+        form[ 0 ].reset();
+        allFields.removeClass( "ui-state-error" );
+      }
+    });
+ 
+    form = dialog.find( "form" ).on( "submit", function( event ) {
+      event.preventDefault();
+      addUser();
+    });
+ 
+    $( "#create-point" ).button().on( "click", function() {
+      dialog.dialog( "open" );
+    });
+    }     
+    </script>
+    <script type="text/javascript">
+/*capture mouse position for markers:begin*/        
+var mouse = {x: 0, y: 0};
+document.addEventListener('mousemove', function(e){ 
+    mouse.x = e.clientX || e.pageX; 
+    mouse.y = e.clientY || e.pageY 
+}, false);
+/*capture mouse position for markers:end*/        
+
+      $(function(){
+        
+        //call ui dialog form
+        ui_dialog_form();
+        
+        var $map = $("#googleMap"), 
+
+          menu = new Gmap3Menu($map), 
+          current,  // current click event (used to save as start / end position)
+          m1,       // marker "from"
+          m2;       // marker "to"
+          
+        /*menu add for non marker locations:begin*/          
+        // MENU : ITEM 3
+        menu.add("Zoom in", "zoomIn", 
+          function(){
+            var map = $map.gmap3("get");
+            map.setZoom(map.getZoom() + 1);
+            menu.close();
+          });
+        
+        // MENU : ITEM 4
+        menu.add("Zoom out", "zoomOut",
+          function(){
+            var map = $map.gmap3("get");
+            map.setZoom(map.getZoom() - 1);
+            menu.close();
+          });
+        
+        // MENU : ITEM 5
+        menu.add("Center here", "centerHere", 
+          function(){
+              $map.gmap3("get").setCenter(current.latLng);
+              menu.close();
+          });
+        /*menu add for non marker locations:end*/  
+          
+        /*menu add for markers:begin*/
+        menu.add_marker("Create Point", "item_none", 
+          function(){
+            $( "#create-point" ).click();
+            menu.close();
+            //javascript action
+          });
+        menu.add_marker("Create Geofence", "item_none", 
+          function(){
+            menu.close();
+            //javascript action
+            alert('Create Geofence');
+          });
+        menu.add_marker("View Truck Geofence History", "item_none", 
+          function(){
+            menu.close();
+            //javascript action
+            alert('View Truck Geofence History');
+          });
+        menu.add_marker("Create Order", "item_none", 
+          function(){
+            menu.close();
+            //javascript action
+            alert('Create Order');
+          });
+        menu.add_marker("Edit Truck", "item_none", 
+          function(){
+            menu.close();
+            //javascript action
+            alert('Edit Truck');
+          });
+        menu.add_marker("Create Speeding Alert", "item_none separator", 
+          function(){
+            menu.close();
+            //javascript action
+            alert('Create Speeding Alert');
+          });
+        menu.add_marker("Chat with driver", "item_none", 
+          function(){
+            menu.close();
+            //javascript action
+            alert('Chat with driver');
+          });
+        menu.add_marker("Send File", "item_none", 
+          function(){
+            menu.close();
+            //javascript action
+            alert('Send File');
+          });
+        menu.add_marker("View Orders", "item_none", 
+          function(){
+            menu.close();
+            //javascript action
+            alert('View Orders');
+          });
+        menu.add_marker("Edit Order", "item_none", 
+          function(){
+            menu.close();
+            //javascript action
+            alert('Edit Order');
+          });          
+        /*menu add for markers:end*/
+        
+        // INITIALIZE GOOGLE MAP
+        $map.gmap3({
+          map:{
+            options:{
+              center:[46.578498,2.457275],
+              zoom: 5
+            },
+            events:{
+              rightclick:function(map, event){
+                current = event;
+                menu.open(current);
+                //alert(JSON.stringify(current));
+                menu.open(current);
+              },
+              click: function(){
+                menu.close();
+              },
+              dragstart: function(){
+                menu.close();
+              },
+              zoom_changed: function(){
+                menu.close();
+              }
+            }
+          },
+          /*marker setup:begin*/
+          marker:{
+            values:[
+              {latLng:[48.8620722, 2.352047], data:"Paris", options:{icon: "http://maps.google.com/mapfiles/marker_green.png"}},
+              {address:"86000 Poitiers, France", data:"Poitiers"},
+              {address:"66000 Perpignan, France", data:"Perpignan"}
+            ],
+            options:{
+              draggable: false
+            },
+            /*events for markers:begin*/
+            events:{
+              mouseover: function(marker, event, context){
+                  
+                var map = $(this).gmap3("get"),
+                  infowindow = $(this).gmap3({get:{name:"infowindow"}});
+                if (infowindow){
+                  infowindow.open(map, marker);
+                  infowindow.setContent(context.data);
+                } else {
+                  $(this).gmap3({
+                    infowindow:{
+                      anchor:marker, 
+                      options:{content: context.data}
+                    }
+                  });
+                }
+              },
+              mouseout: function(){
+                var infowindow = $(this).gmap3({get:{name:"infowindow"}});
+                if (infowindow){
+                  infowindow.close();
+                }
+              },
+              rightclick:function(map, event){
+                current = event;
+                //console.log(current);
+                //alert(mouse.x+'-'+mouse.y);
+                //alert(JSON.stringify(event));
+
+                menu.open_marker(current,mouse.x,mouse.y);
+              },
+              click: function(){
+                //menu.close();
+              },
+              dragstart: function(){
+                //menu.close();
+              },
+              zoom_changed: function(){
+                //menu.close();
+              }
+            },          
+            /*events for markers:end*/
+          
+          // add direction renderer to configure options (else, automatically created with default options)
+            directionsrenderer:{
+              divId:"directions",
+              options:{
+                preserveViewport: true,
+                markerOptions:{
+                  visible: false
+                }
+              }
+            }
+          }
+          /*marker setup:end*/
+        });
+      });
+    </script>  
+  </head>
+    
+  <body>
+    <div id="container">
+      <div id="directions"></div>
+      <div id="googleMap"></div>
+    </div>
+      
+<div id="dialog-form" title="Create point">
+  <p class="validateTips">Create a new Push Pin.</p>
+  <form>
+    <fieldset>
+      <label for="name">Name</label>
+      <input type="text" name="name" id="name" value="name" class="text ui-widget-content ui-corner-all"><br/>
+      <label for="email">Email</label>
+      <input type="text" name="email" id="email" value="email@emaildomain.com" class="text ui-widget-content ui-corner-all">
+      <input type="submit" tabindex="-1" style="position:absolute; top:-1000px">
+    </fieldset>
+  </form>
+</div>
+<button id="create-point" style="display: none">Create Point</button>  
+
+</body>
+</html>
